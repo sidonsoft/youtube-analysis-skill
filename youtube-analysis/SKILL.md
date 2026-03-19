@@ -9,13 +9,13 @@ Goal: extract transcript first, then use the main chat model for interpretation.
 
 ## Path resolution
 
-The script `scripts/extract_transcript.py` is relative to the skill directory. In a workspace context, resolve it as:
+The script `scripts/extract_transcript.py` is relative to the skill directory. Resolve it from the skill's parent directory, e.g.:
 
 ```bash
-python3 ~/.npm-global/lib/node_modules/openclaw/skills/youtube-analysis/scripts/extract_transcript.py <url>
+python3 youtube-analysis/scripts/extract_transcript.py <url>
 ```
 
-Or from within the skill directory after `cd`-ing there.
+Or change into the skill directory first, then run the script directly.
 
 ## Workflow
 
