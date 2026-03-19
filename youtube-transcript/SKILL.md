@@ -1,45 +1,42 @@
 ---
 name: youtube-transcript
-description: "Extract transcripts from YouTube videos. Use when you need to analyze, summarize, or quote YouTube video content. Triggers on: extract transcript, get YouTube transcript, YouTube video text, transcribe YouTube, video transcript, or any request involving getting text content from a YouTube URL. Supports English and other languages via --lang flag."
+description: "Extract a raw text transcript from a YouTube video. Use when the user only wants the transcript text itself — no summary, no analysis, no credibility check. Triggers on: get transcript, extract transcript, give me the YouTube transcript, raw transcript, video captions. For summary, analysis, or fact-checking use the youtube-analysis skill instead."
 ---
 
-# YouTube Transcript Skill
+# YouTube Transcript
 
 Extract clean text transcripts from YouTube videos using `yt-dlp`.
 
-## Quick Usage
+## Path resolution
+
+The script `scripts/extract_transcript.py` is relative to the skill directory. Resolve it as:
 
 ```bash
-python3 scripts/extract_transcript.py <youtube_url>
+python3 ~/.npm-global/lib/node_modules/openclaw/skills/youtube-transcript/scripts/extract_transcript.py <url>
 ```
 
-## Options
-
-- `--lang <code>` — Language code (default: `en`). Use `en,es` for multiple, or `a.en` for auto-generated English.
-- `--json` — Output structured JSON instead of plain text.
-
-## Script Output
-
-**Success:** Returns plain text transcript (timestamps stripped) or JSON with `success`, `text`, `video_id`, `title`.
-
-**Failure:** Returns error message explaining why (no captions, age-restricted, etc.).
-
-## Example
+## Usage
 
 ```bash
-python3 scripts/extract_transcript.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+python3 scripts/extract_transcript.py <youtube_url> [--lang en]
 ```
 
-## Edge Cases
+- `--lang <code>` — Language code (default: `en`). Use `a.en` for auto-generated English captions.
 
-- **Age-restricted videos**: Returns error — cannot extract
-- **No captions**: Returns error with suggestion to try `--lang a.en` for auto-generated
-- **Playlist URLs**: Extracts from first video only (or use `--flat-playlist` for all)
-- **Live videos**: Not supported — no captions available
+## Output
+
+Returns plain text transcript (timestamps and captions metadata stripped). Non-zero exit code on failure.
+
+## Edge cases
+
+- **Age-restricted videos:** returns error — cannot extract
+- **No captions:** returns error
+- **Live videos:** not supported
+- **Playlist URLs:** extracts first video only
 
 ## Dependencies
 
-Requires `yt-dlp` installed:
+Requires `yt-dlp`:
 
 ```bash
 pip install yt-dlp
@@ -47,9 +44,11 @@ pip install yt-dlp
 sudo apt install yt-dlp
 ```
 
-## When This Skill Doesn't Work
+## Alternatives if this fails
 
-Try alternative approaches:
-1. Use `web_fetch` on `youtubesubtitles.com` with the video URL
-2. Check if the video has a community transcript (not accessible via this script)
-3. For very short clips, consider downloading and using a local transcription service
+1. `web_fetch` on `youtubesubtitles.com` with the video URL
+2. Download the video and use a local transcription service
+
+## What this skill does not do
+
+This skill only extracts raw transcript text. It does not summarize, analyze, or assess credibility. For those tasks, use the `youtube-analysis` skill.

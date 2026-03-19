@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
 Extract transcript from a YouTube video using yt-dlp.
-Returns JSON for easy parsing by calling agents.
+Always returns JSON to stdout. Exit code 0 on success, non-zero on failure.
 
-Usage: python3 extract_transcript.py <youtube_url> [--lang en]
+Usage: python3 extract_transcript.py <youtube_url> [--lang en] [--json]
+  --json   Explicit JSON output (default). Included for docs consistency.
 """
 
 import sys
@@ -21,8 +22,28 @@ def extract_transcript(url, lang="en"):
 
     Returns:
         dict with: success (bool), text (str), video_id (str),
-                   title (str), error (str), lang (str)
+                   title (str or None), error (str or None)
     """
+    # Get video metadata first (id, title) so we can return title reliably
+    video_id = None
+    video_title = None
+
+    info_cmd = [
+        "yt-dlp", "--skip-download",
+        "--print=%(id)s|%(title)s",
+        url
+    ]
+
+    try:
+        info_result = subprocess.run(info_cmd, capture_output=True, text=True, timeout=30)
+        if info_result.returncode == 0 and info_result.stdout.strip():
+            parts = info_result.stdout.strip().split("|", 1)
+            video_id = parts[0]
+            video_title = parts[1] if len(parts) > 1 else None
+    except Exception:
+        # Non-fatal: still try to extract transcript
+        pass
+
     with tempfile.TemporaryDirectory() as tmpdir:
         output_template = os.path.join(tmpdir, "%(id)s.%(ext)s")
 
@@ -39,9 +60,15 @@ def extract_transcript(url, lang="en"):
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         except subprocess.TimeoutExpired:
-            return {"success": False, "error": "Timeout extracting transcript", "url": url}
+            return {
+                "success": False, "error": "Timeout extracting transcript",
+                "video_id": video_id, "title": video_title, "url": url
+            }
         except Exception as e:
-            return {"success": False, "error": str(e), "url": url}
+            return {
+                "success": False, "error": str(e),
+                "video_id": video_id, "title": video_title, "url": url
+            }
 
         # Find subtitle files
         subtitle_files = []
@@ -53,28 +80,25 @@ def extract_transcript(url, lang="en"):
             pass
 
         if not subtitle_files:
-            # Diagnose the failure
             stderr_lower = result.stderr.lower() if result.stderr else ""
             if any(k in stderr_lower for k in ["age", "login", "requires authentication", "restricted"]):
                 return {
                     "success": False,
                     "error": "Video is age-restricted or requires login",
-                    "url": url
+                    "video_id": video_id, "title": video_title, "url": url
                 }
-            if "video" in stderr_lower and ("not found" in stderr_lower or " unavailable" in stderr_lower):
+            if "video" in stderr_lower and ("not found" in stderr_lower or "unavailable" in stderr_lower):
                 return {
                     "success": False,
                     "error": "Video not found or unavailable",
-                    "url": url
+                    "video_id": video_id, "title": video_title, "url": url
                 }
             return {
                 "success": False,
                 "error": f"No subtitles found. yt-dlp exit code: {result.returncode}",
-                "url": url,
-                "stderr": result.stderr[:500] if result.stderr else ""
+                "video_id": video_id, "title": video_title, "url": url
             }
 
-        # Parse the first subtitle file
         subtitle_file = subtitle_files[0]
         ext = os.path.splitext(subtitle_file)[1]
 
@@ -83,13 +107,11 @@ def extract_transcript(url, lang="en"):
 
         text = parse_subs(raw, ext)
 
-        # Extract video_id from filename if available
-        video_id = os.path.splitext(os.path.basename(subtitle_file))[0]
-
         return {
             "success": True,
             "text": text,
             "video_id": video_id,
+            "title": video_title,
             "subtitle_format": ext.lstrip("."),
             "lang": lang,
             "url": url
@@ -119,12 +141,9 @@ def parse_subs(content, ext):
                 if len(parts) > 9:
                     buffer.append(parts[9].strip())
             continue
-        # Skip VTT headers and metadata
         if line.startswith(("WEBVTT", "Kind:", "Language:", "NOTE", "<")):
             continue
-        # Remove HTML tags
         line = re.sub(r"<[^>]+>", "", line)
-        # Remove VTT timestamp cue settings
         line = re.sub(r"^[-\s]+", "", line)
         if line:
             buffer.append(line)
@@ -139,6 +158,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract transcript from YouTube video")
     parser.add_argument("url", help="YouTube video URL")
     parser.add_argument("--lang", default="en", help="Language code (default: en)")
+    parser.add_argument(
+        "--json", action="store_true", default=True,
+        help="Output JSON (default; included for docs consistency)"
+    )
 
     args = parser.parse_args()
     result = extract_transcript(args.url, args.lang)
